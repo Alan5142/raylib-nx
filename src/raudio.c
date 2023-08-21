@@ -239,17 +239,20 @@ typedef struct tagBITMAPINFOHEADER {
     #define QOA_MALLOC RL_MALLOC
     #define QOA_FREE RL_FREE
 
-#if defined(_MSC_VER ) // par shapes has 2 warnings on windows, so disable them just fof this file
-#pragma warning( push )
-#pragma warning( disable : 4018)
-#pragma warning( disable : 4267)
-#pragma warning( disable : 4244)
-#endif
-
+    #if defined(_MSC_VER)           // Disable some MSVC warning
+        #pragma warning(push)
+        #pragma warning(disable : 4018)
+        #pragma warning(disable : 4267)
+        #pragma warning(disable : 4244)
+    #endif
 
     #define QOA_IMPLEMENTATION
     #include "external/qoa.h"           // QOA loading and saving functions
     #include "external/qoaplay.c"       // QOA stream playing helper functions
+
+    #if defined(_MSC_VER)
+        #pragma warning(pop)        // Disable MSVC warning suppression
+    #endif
 #endif
 
 #if defined(SUPPORT_FILEFORMAT_FLAC)
@@ -266,16 +269,16 @@ typedef struct tagBITMAPINFOHEADER {
     #define JARXM_MALLOC RL_MALLOC
     #define JARXM_FREE RL_FREE
 
-    #if defined(_MSC_VER )              // jar_xm has warnings on windows, so disable them just for this file
-        #pragma warning( push )
-        #pragma warning( disable : 4244)
+    #if defined(_MSC_VER)           // Disable some MSVC warning
+        #pragma warning(push)
+        #pragma warning(disable : 4244)
     #endif
 
     #define JAR_XM_IMPLEMENTATION
     #include "external/jar_xm.h"        // XM loading functions
 
-    #if defined(_MSC_VER )
-        #pragma warning( pop )
+    #if defined(_MSC_VER)
+        #pragma warning(pop)        // Disable MSVC warning suppression
     #endif
 #endif
 
@@ -936,6 +939,32 @@ Sound LoadSoundFromWave(Wave wave)
     return sound;
 }
 
+// Clone sound from existing sound data, clone does not own wave data
+// Wave data must
+// NOTE: Wave data must be unallocated manually and will be shared across all clones
+Sound LoadSoundAlias(Sound source)
+{
+    Sound sound = { 0 };
+
+    if (source.stream.buffer->data != NULL)
+    {
+        AudioBuffer* audioBuffer = LoadAudioBuffer(AUDIO_DEVICE_FORMAT, AUDIO_DEVICE_CHANNELS, AUDIO.System.device.sampleRate, source.frameCount, AUDIO_BUFFER_USAGE_STATIC);
+        if (audioBuffer == NULL)
+        {
+            TRACELOG(LOG_WARNING, "SOUND: Failed to create buffer");
+            return sound; // early return to avoid dereferencing the audioBuffer null pointer
+        }
+        audioBuffer->data = source.stream.buffer->data;
+        sound.frameCount = source.frameCount;
+        sound.stream.sampleRate = AUDIO.System.device.sampleRate;
+        sound.stream.sampleSize = 32;
+        sound.stream.channels = AUDIO_DEVICE_CHANNELS;
+        sound.stream.buffer = audioBuffer;
+    }
+
+    return sound;
+}
+
 // Checks if a sound is ready
 bool IsSoundReady(Sound sound)
 {
@@ -958,6 +987,17 @@ void UnloadSound(Sound sound)
 {
     UnloadAudioBuffer(sound.stream.buffer);
     //TRACELOG(LOG_INFO, "SOUND: Unloaded sound data from RAM");
+}
+
+void UnloadSoundAlias(Sound alias)
+{
+    // untrack and unload just the sound buffer, not the sample data, it is shared with the source for the alias
+    if (alias.stream.buffer != NULL)
+    {
+        ma_data_converter_uninit(&alias.stream.buffer->converter, NULL);
+        UntrackAudioBuffer(alias.stream.buffer);
+        RL_FREE(alias.stream.buffer);
+    }
 }
 
 // Update sound buffer with new data

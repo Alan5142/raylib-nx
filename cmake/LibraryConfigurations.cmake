@@ -121,7 +121,7 @@ elseif ("${PLATFORM}" MATCHES "Nintendo Switch")
     link_libraries("${LIBS_PRIVATE}")
 endif ()
 
-if (NOT ${OPENGL_VERSION})
+if (NOT ${OPENGL_VERSION} MATCHES "OFF")
     set(${SUGGESTED_GRAPHICS} "${GRAPHICS}")
     if (${OPENGL_VERSION} MATCHES "4.3")
 		set(GRAPHICS "GRAPHICS_API_OPENGL_43")
